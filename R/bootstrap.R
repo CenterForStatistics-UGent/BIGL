@@ -49,26 +49,26 @@
 #'   generateData(data = data[, c("d1", "d2")], pars = coefs, sigma = 1)
 generateData <- function(pars, sigma, data = NULL,
                          transforms = NULL,
-                         null_model = c("loewe", "hsa"),
+                         null_model = c("loewe", "hsa","bliss"),
                          error = 1, sampling_errors = NULL,
                          wild_bootstrap = FALSE, ...) {
-
+  
   ## Argument matching
   null_model <- match.arg(null_model)
-
+  
   if (inherits(pars, "MarginalFit")) {
     transforms <- pars$transforms
     pars <- pars$coef
   }
-
+  
   if (is.null(data)) data <- expand.grid("d1" = rep(0:10, each = 2),
                                          "d2" = rep(0:10, each = 2))
-
+  
   if ("effect" %in% colnames(data)) {
     warning("effect column is unneeded for generateData() function and will be dropped.")
     data <- data[, c("d1", "d2")]
   }
-
+  
   ## Use identity transformation if no transform functions are supplied
   if (is.null(transforms)) {
     idF <- function(z, ...) z
@@ -77,38 +77,39 @@ generateData <- function(pars, sigma, data = NULL,
                        "BiolT" = idF,
                        "compositeArgs" = NULL)
   }
-
+  
   ySim <- switch(null_model,
                  "loewe" = generalizedLoewe(data, pars, asymptotes = 2)$response,
-                 "hsa" = hsa(data[, c("d1", "d2")], pars))
-
+                 "hsa" = hsa(data[, c("d1", "d2")], pars),
+                 "bliss" = Blissindependence(data[, c("d1","d2")], pars))
+  
   ySim <- with(transforms,
                PowerT(BiolT(ySim, compositeArgs), compositeArgs))
-
+  
   with(as.list(pars), {
     errors <- switch(as.character(error),
                      ## Normal
                      "1" = { rnorm(length(ySim), 0, sigma) },
                      ## Two normals
                      "2" = { ru <- sample(1:2, replace = TRUE, size = length(ySim))
-                             mus <- c(-sigma, sigma)
-                             sigmas <- c(sigma/2, sigma/3)
-                             rnorm(length(ySim), mus[ru], sigmas[ru]) },
+                     mus <- c(-sigma, sigma)
+                     sigmas <- c(sigma/2, sigma/3)
+                     rnorm(length(ySim), mus[ru], sigmas[ru]) },
                      ## Distribution with right-tail outliers
                      "3" = { sigma*(rchisq(length(ySim), df=4)-4)/8 },
                      ## Resampling from defined vector
                      "4" = { if (!wild_bootstrap) {
-                               errors_test <- sample(sampling_errors, nrow(data), replace = TRUE)
-                               errors_test
-                             } else {
-                               ## Use Rademacher distribution to account for heteroskedasticity
-                               errors_test <- sampling_errors*
-                                 (2*rbinom(length(sampling_errors), size = 1, prob = 0.5)-1)
-                               errors_test
-                             }},
+                       errors_test <- sample(sampling_errors, nrow(data), replace = TRUE)
+                       errors_test
+                     } else {
+                       ## Use Rademacher distribution to account for heteroskedasticity
+                       errors_test <- sampling_errors*
+                         (2*rbinom(length(sampling_errors), size = 1, prob = 0.5)-1)
+                       errors_test
+                     }},
                      stop("Unavailable error type.")
-                     )
-
+    )
+    
     ySim <- with(transforms, InvPowerT(ySim + errors, compositeArgs))
     data.frame("effect" = ySim, data)
   })
@@ -132,33 +133,33 @@ generateData <- function(pars, sigma, data = NULL,
 #'   CPBootstrap(data, fitResult, null_model = "loewe", B.CP = 5)
 CPBootstrap <- function(data, fitResult,
                         transforms = fitResult$transforms,
-                        null_model = c("loewe", "hsa"), B.CP, ...) {
-
+                        null_model = c("loewe", "hsa", "bliss"), B.CP, ...) {
+  
   ## Argument matching
   null_model <- match.arg(null_model)
-
+  
   if (B.CP < 2) stop("Number of iterations for bootstrapping CP needs to exceed 2.")
   sigma0 <- fitResult$sigma
-
+  
   pred <- sapply(seq_len(B.CP), function(b) {
     simModel <- simulateNull(data = data, fitResult = fitResult,
                              transforms = transforms,
                              null_model = null_model, ...)
     dataCP <- simModel$data
     fitResultCP <- simModel$fitResult
-
+    
     predOffAxis <- predictOffAxis(data = dataCP, fitResult = fitResultCP,
                                   null_model = null_model,
                                   transforms = transforms)
-
+    
     ## If multiple predictions with same x-y coordinates are available,
     ## average them out.
     pred <- aggregate(predicted ~ d1 + d2,
                       predOffAxis$offaxisZTable, mean)$predicted/sigma0
-
+    
     return(pred)
   })
-
+  
   CP <- var(t(pred))
   return(CP)
 }
@@ -176,38 +177,38 @@ CPBootstrap <- function(data, fitResult,
 #' @inheritParams generateData
 bootstrapData <- function(data, fitResult,
                           transforms = fitResult$transforms,
-                          null_model = c("loewe", "hsa"), ...) {
-
+                          null_model = c("loewe", "hsa", "bliss"), ...) {
+  
   ## Argument matching
   null_model <- match.arg(null_model)
-
+  
   simModel <- simulateNull(data = data, fitResult = fitResult,
                            transforms = transforms,
                            null_model = null_model, ...)
   dataB <- simModel$data
   fitResultB <- simModel$fitResult
-
+  
   respS <- predictOffAxis(dataB, fitResultB,
                           null_model = null_model,
                           transforms = transforms)
-
+  
   Rb <- aggregate(effect - predicted ~ d1 + d2,
                   data = respS$offaxisZTable, mean)[[3]]
-
+  
   repsb <- aggregate(effect ~ d1 + d2,
                      data = respS$offaxisZTable, length)$effect
-
+  
   ## Covariance matrix of the predictions
   n1b <- length(Rb)
   stopifnot(n1b == length(repsb))
-
+  
   ## Estimators of the residual variance
   df0b <- fitResultB$df
   MSE0b <- fitResultB$sigma^2
-
+  
   out <- list("Rb" = Rb, "MSE0b" = MSE0b, "fitResult" = fitResultB,
               "n1b" = n1b, "repsb" = repsb)
-
+  
   return(out)
 }
 
@@ -227,43 +228,43 @@ bootstrapData <- function(data, fitResult,
 #'   simulateNull(data, fitResult, null_model = "hsa")
 simulateNull <- function(data, fitResult,
                          transforms = fitResult$transforms,
-                         null_model = c("loewe", "hsa"), ...) {
-
+                         null_model = c("loewe", "hsa", "bliss"), ...) {
+  
   ## Argument matching
   null_model <- match.arg(null_model)
-
+  
   method <- fitResult$method
   coefFit0 <- fitResult$coef
   sigma0 <- fitResult$sigma
   model <- fitResult$model
-
+  
   control <- {
     if (method %in% c("nls", "nlslm"))
       list("maxiter" = 200)
   }
-
+  
   ## Parameter estimates may at times return an error due to non-convergence. If
   ## necessary, repeat the step until it functions properly and 1000 times at
   ## most.
   counter <- 0
   initPars <- coefFit0
   repeat {
-
+    
     simData <- generateData(pars = coefFit0, sigma = sigma0,
                             data = data[, c("d1", "d2")],
                             transforms = transforms,
                             null_model = null_model, ...)
-
+    
     ## In cases where added errors put the response into negative domain, revert
     ## it back to the positive one. Usually, values of such observations tend to
     ## be quite small.
     simData$effect <- abs(simData$effect)
-
+    
     ## construct a list of arguments, including ... passed to original 
     ## `fitMarginals` call (saved as `extraArgs`)
     paramsMarginal <- list("data" = simData, "method" = method, 
-        "start" = initPars, "model" = model, "transforms" = transforms,
-        "control" = control)
+                           "start" = initPars, "model" = model, "transforms" = transforms,
+                           "control" = control)
     if (!is.null(fitResult$extraArgs) && is.list(fitResult$extraArgs))
       # use `modifyList` here, since `control` could be user-defined
       paramsMarginal <- modifyList(paramsMarginal, fitResult$extraArgs)
@@ -271,7 +272,7 @@ simulateNull <- function(data, fitResult,
     simFit <- try({
       do.call(fitMarginals, paramsMarginal)
     }, silent = TRUE)
-
+    
     counter <- counter + 1
     initPars <- NULL
     if (counter > 1000)
@@ -279,10 +280,10 @@ simulateNull <- function(data, fitResult,
                  "Check that transformation functions correspond ",
                  "to the marginal model."))
     if (!inherits(simFit, "try-error")) break
-
+    
   }
-
+  
   return(list("data" = simData,
               "fitResult" = simFit))
-
+  
 }
