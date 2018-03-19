@@ -29,21 +29,22 @@
 #'   predictOffAxis(data, fitResult, null_model = "hsa")
 predictOffAxis <- function(data, fitResult,
                            transforms = fitResult$transforms,
-                           null_model = c("loewe", "hsa"), ...) {
-
+                           null_model = c("loewe", "hsa", "bliss"), ...) {
+  
   ## Argument matching
   null_model <- match.arg(null_model)
-
+  
   uniqueDoses <- with(data, list("d1" = sort(unique(data$d1)),
                                  "d2" = sort(unique(data$d2))))
   doseGrid <- expand.grid(uniqueDoses)
-
+  
   predSurface <- array(dim = lengths(uniqueDoses))
   fitLoewe <- generalizedLoewe(doseGrid, fitResult$coef)
   predSurface[] <- switch(null_model,
                           "loewe" = fitLoewe$response,
-                          "hsa" = hsa(doseGrid, fitResult$coef))
-
+                          "hsa" = hsa(doseGrid, fitResult$coef)
+                          "bliss" = Blissindependence(doseGrid, fitresult$coef))
+  
   if (!is.null(transforms)) {
     CompositeT <- with(transforms,
                        function(y, args) PowerT(BiolT(y, args), args))
@@ -52,14 +53,14 @@ predictOffAxis <- function(data, fitResult,
     predSurface <- with(transforms,
                         CompositeT(predSurface, compositeArgs))
   }
-
+  
   dataOffAxis <- with(data, data[d1 & d2, , drop = FALSE])
   predOffAxis <- predSurface[cbind(match(dataOffAxis$d1, uniqueDoses$d1),
                                    match(dataOffAxis$d2, uniqueDoses$d2))]
-
+  
   offaxisZTable <- cbind(dataOffAxis[, c("d1", "d2", "effect"), drop = FALSE],
                          "predicted" = predOffAxis)
-
+  
   return(list("offaxisZTable" = offaxisZTable,
               "predSurface" = predSurface,
               "occupancy" = fitLoewe$occupancy))
