@@ -18,10 +18,10 @@
 #'   cannot be passed to \code{\link{plotResponseSurface}}.
 #' @export
 plot.ResponseSurface <- function(x, color = c("z-score", "maxR", "occupancy"), ...) {
-
+  
   color <- match.arg(color)
   inputs <- as.list(substitute(list(...)))[-1L]
-
+  
   ## Green is synergy, red is antagonism
   if(!exists("colorPalette", inputs)) {
     inputs$colorPalette <- c("red", rep("grey70", 2), "blue")
@@ -29,7 +29,7 @@ plot.ResponseSurface <- function(x, color = c("z-score", "maxR", "occupancy"), .
       inputs$colorPalette <- rev(inputs$colorPalette)
     }
   }
-
+  
   if (color == "z-score") {
     boundary <- sd(x$offAxisTable[["z.score"]])
     inputs$colorBy <- x$offAxisTable[, c("d1", "d2", "z.score")]
@@ -46,14 +46,14 @@ plot.ResponseSurface <- function(x, color = c("z-score", "maxR", "occupancy"), .
     if (!exists("breaks", inputs)) inputs$breaks <- c(0, 0.25, 0.5, 0.75, 1)
     if (!exists("main", inputs)) inputs$main <- "Occupancy rate"
   }
-
+  
   inputs$data <- x$data
   inputs$fitResult <- x$fitResult
   inputs$transforms <- x$transforms
   inputs$null_model <- x$null_model
-
+  
   do.call(plotResponseSurface, inputs)
-
+  
 }
 
 #' Method for plotting of contours based on maxR statistics
@@ -62,12 +62,12 @@ plot.ResponseSurface <- function(x, color = c("z-score", "maxR", "occupancy"), .
 #' @param ... Further parameters passed to \code{\link{plot.maxR}}
 #' @export
 contour.ResponseSurface <- function(x, ...) {
-
+  
   if (!exists("maxR", x))
     stop("maxR statistics were not found.")
-
+  
   plot(x$maxR, ...)
-
+  
 }
 
 #' Summary of \code{ResponseSurface} object
@@ -76,17 +76,17 @@ contour.ResponseSurface <- function(x, ...) {
 #' @param ... Further parameters
 #' @export
 summary.ResponseSurface <- function(object, ...) {
-
+  
   ans <- list()
   ans$marginalFit <- summary(object$fitResult)
   ans$null_model <- object$null_model
   ans$shared_asymptote <- object$fitResult$shared_asymptote
-
+  
   if (!is.null(object$meanR)) ans$meanR <- summary(object$meanR)
   if (!is.null(object$maxR)) ans$maxR <- summary(object$maxR)
-
+  
   ans$occup <- mean(object$occupancy$occupancy)
-
+  
   class(ans) <- "summary.ResponseSurface"
   ans
 }
@@ -97,7 +97,7 @@ summary.ResponseSurface <- function(object, ...) {
 #' @param ... Further parameters
 #' @export
 print.summary.ResponseSurface <- function(x, ...) {
-
+  
   cat("Null model: ")
   if (x$null_model == "loewe" & x$shared_asymptote == TRUE)
     cat("Standard Loewe Additivity")
@@ -107,23 +107,27 @@ print.summary.ResponseSurface <- function(x, ...) {
     cat("Highest Single Agent with shared maximal response")
   else if (x$null_model == "hsa" & x$shared_asymptote == FALSE)
     cat("Highest Single Agent with differing maximal response")
+  else if (x$null_model == "Blissindependence" & x$shared_asymptote == TRUE)
+    cat("Bliss independence with shared maximal response")
+  else if (x$null_model == "Blissindependence" & x$shared_asymptote == FALSE)
+    cat("Bliss independence with differing maximal response")
   else
     cat(x$null_model)
-
+  
   cat("\n")
   cat("Mean occupancy rate:", x$occup)
   cat("\n\n")
   print(x$marginalFit)
   cat("\n")
-
+  
   if (!is.null(x$meanR)) print(x$meanR)
   if (!is.null(x$maxR)) print(x$maxR)
-
+  
   if (is.null(x$meanR) & is.null(x$maxR)) {
     cat("\n\n")
     cat("No test statistics were computed.")
   }
-
+  
   cat("\n")
 }
 
@@ -134,12 +138,13 @@ print.summary.ResponseSurface <- function(x, ...) {
 #' @param ... Further parameters
 #' @export
 fitted.ResponseSurface <- function(object, ...) {
-
+  
   doseInput <- object$data[, c("d1", "d2")]
   parmInput <- coef(object$fitResult)
-
+  
   switch(object$null_model,
          "loewe" = generalizedLoewe(doseInput, parmInput)$response,
-         "hsa" = hsa(doseInput, parmInput))
-
+         "hsa" = hsa(doseInput, parmInput),
+         "Blissindependence" = Blissindependence(doseInput, parmInput))
+  
 }
