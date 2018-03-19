@@ -42,7 +42,7 @@ predictOffAxis <- function(data, fitResult,
   fitLoewe <- generalizedLoewe(doseGrid, fitResult$coef)
   predSurface[] <- switch(null_model,
                           "loewe" = fitLoewe$response,
-                          "hsa" = hsa(doseGrid, fitResult$coef)
+                          "hsa" = hsa(doseGrid, fitResult$coef),
                           "bliss" = Blissindependence(doseGrid, fitresult$coef))
   
   if (!is.null(transforms)) {
