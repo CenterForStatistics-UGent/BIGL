@@ -43,13 +43,13 @@
 #'   CP <- CPBootstrap(data, fitResult, null_model = "loewe", B.CP = 5)
 #'   meanR(data, fitResult, null_model = "loewe", CP = CP)
 meanR <- function(data, fitResult, transforms = fitResult$transforms,
-                  null_model = c("loewe", "hsa"), R, CP, reps,
+                  null_model = c("loewe", "hsa", "bliss"), R, CP, reps,
                   nested_bootstrap = FALSE, B.B = NULL, B.CP = NULL,
                   cl = NULL, ...) {
-
+  
   ## Argument matching
   null_model <- match.arg(null_model)
-
+  
   ## If not supplied, calculate these manually
   if (missing(R) | missing(reps)) {
     respS <- predictOffAxis(data = data, fitResult = fitResult,
@@ -60,16 +60,16 @@ meanR <- function(data, fitResult, transforms = fitResult$transforms,
     if (missing(reps)) reps <- aggregate(effect ~ d1 + d2,
                                          data = respS$offaxisZTable, length)[["effect"]]
   }
-
+  
   n1 <- length(R)
   MSE0 <- fitResult$sigma^2
   df0 <- fitResult$df
-
+  
   A <- CP + diag(1/reps)
-
+  
   ## Test statistic and its degrees of freedom
   FStat <- as.numeric(t(R) %*% solve(A) %*% R / (n1*MSE0))
-
+  
   if (is.null(B.B)) {
     ans <- list("FStat" = FStat,
                 "p.value" = pf(FStat, n1, df0, lower.tail = FALSE),
@@ -77,46 +77,46 @@ meanR <- function(data, fitResult, transforms = fitResult$transforms,
     class(ans) <- append("meanR", class(ans))
     return(ans)
   }
-
+  
   pb <- progress_bar$new(format = "(meanR): [:bar]:percent",
                          total = B.B, width = 60)
   pb$tick(0)
-
+  
   iterFunction <- function(i) {
-
+    
     ## Update progress bar
     pb$tick()
-
+    
     out <- bootstrapData(data = data, fitResult = fitResult,
                          transforms = transforms, null_model = null_model, ...)
-
+    
     MSE0b <- out$MSE0b
     Rb <- out$Rb
     n1b <- out$n1b
     repsb <- out$repsb
     fitResultb <- out$fitResult
-
+    
     if (nested_bootstrap)
       CPb <- CPBootstrap(data = data, fitResult = fitResultb,
                          transforms = transforms, null_model = null_model,
                          B.CP = B.CP, ...)
     else
       CPb <- CP
-
+    
     Ab <- (CPb + diag(1/repsb, nrow = n1b))
     FStatb1 <- t(Rb) %*% solve(Ab) %*% Rb / (n1b*MSE0b)
     return(FStatb1)
   }
-
+  
   ## Call parallel computation if needed
   if (is.null(cl)) {
     FStatb <- sapply(seq_len(B.B), iterFunction)
   } else {
     FStatb <- parSapply(cl, seq_len(B.B), iterFunction)
   }
-
+  
   pvalb <- mean(FStatb >= FStat)
-
+  
   ans <- list("FStat" = FStat,
               "FDist" = ecdf(FStatb),
               "p.value" = pvalb,
@@ -170,13 +170,13 @@ meanR <- function(data, fitResult, transforms = fitResult$transforms,
 #'   CP <- CPBootstrap(data, fitResult, null_model = "loewe", B.CP = 5)
 #'   maxR(data, fitResult, null_model = "loewe", CP = CP)
 maxR <- function(data, fitResult, transforms = fitResult$transforms,
-                 null_model = c("loewe", "hsa"), Ymean, CP, reps,
+                 null_model = c("loewe", "hsa", "bliss"), Ymean, CP, reps,
                  nested_bootstrap = FALSE, B.B = NULL, B.CP = NULL,
                  cutoff = 0.95, cl = NULL, ...) {
-
+  
   ## Argument matching
   null_model <- match.arg(null_model)
-
+  
   ## If not supplied, calculate these manually
   if (missing(reps) | missing(Ymean)) {
     respS <- predictOffAxis(data = data, fitResult = fitResult,
@@ -186,47 +186,47 @@ maxR <- function(data, fitResult, transforms = fitResult$transforms,
     if (missing(reps)) reps <- aggregate(effect ~ d1 + d2,
                                          respS$offaxisZTable, length)[["effect"]]
   }
-
+  
   MSE0 <- fitResult$sigma^2
   df0 <- fitResult$df
   coefFit <- fitResult$coef
   R <- Ymean[["effect - predicted"]]
   n1 <- length(R)
-
+  
   A <- (CP + diag(1/reps))*MSE0
-
+  
   E <- eigen(A)
   V <- E$values
   Q <- E$vectors
   Amsq <- Q %*% diag(1/sqrt(V)) %*% t(Q)
-
+  
   RStud <- t(R) %*% Amsq
   Ymean$R <- t(RStud)
   Ymean$absR <- abs(Ymean$R)
-
+  
   ## Use normal approximation if B.B is not provided.
   ## Otherwise, bootstrap the procedure to find the distribution.
   if (is.null(B.B)) {
-
+    
     ## MN: find distribution & overall call & points
     B <- 1e5  # iterations to find distribution of M under null
     sim1 <- abs(matrix(rt(B*n1, df = df0), ncol = n1, byrow = TRUE))
-
+    
     M <- apply(sim1, 1, max)
     q <- quantile(M, cutoff)
     Rnull <- NULL
-
+    
   } else {
-
+    
     pb <- progress_bar$new(format = "(maxR): [:bar]:percent",
                            total = B.B, width = 60)
     pb$tick(0)
-
+    
     iterFunction <- function(i) {
-
+      
       ## Update progress bar
       pb$tick()
-
+      
       out <- bootstrapData(data = data, fitResult = fitResult,
                            transforms = transforms, null_model = null_model, ...)
       MSE0b <- out$MSE0b
@@ -234,38 +234,38 @@ maxR <- function(data, fitResult, transforms = fitResult$transforms,
       n1b <- out$n1b
       repsb <- out$repsb
       fitResultb <- out$fitResult
-
+      
       if (nested_bootstrap)
         CPb <- CPBootstrap(data = data, fitResult = fitResultb,
                            transforms = transforms, null_model = null_model,
                            B.CP = B.CP, ...)
       else
         CPb <- CP
-
+      
       Ab <- (CPb + diag(1/repsb, nrow = n1b))*MSE0b
-
+      
       Eb <- eigen(Ab)
       Vb <- Eb$values
       Qb <- Eb$vectors
       Amsqb <- Qb %*% diag(1/sqrt(Vb)) %*% t(Qb)
-
+      
       RStudb <- t(Rb) %*% Amsqb
       return(RStudb)
     }
-
+    
     ## Call parallel computation if needed
     if (is.null(cl)) {
       Rnull <- sapply(seq_len(B.B), iterFunction)
     } else {
       Rnull <- parSapply(cl, seq_len(B.B), iterFunction)
     }
-
+    
     M <- apply(abs(Rnull), 2, max)
     q <- quantile(M, cutoff)
-
+    
   }
-
-
+  
+  
   call <- {
     if (max(Ymean$absR) > q) {
       invertCall <- Ymean$R[which.max(Ymean$absR)] < 0
@@ -276,24 +276,24 @@ maxR <- function(data, fitResult, transforms = fitResult$transforms,
       else "Undefined"
     } else "None"
   }
-
+  
   Ymean$sign <- Ymean$absR > q
   Ymean$call <- "None"
-
+  
   ## MN: here make call based on the parameters
   Ymean$call[Ymean$sign] <- c("Syn", "Ant")[1+(Ymean$R[Ymean$sign] < 0)]
   if (coefFit["b"] > coefFit["m1"]) {
     Ymean$call[Ymean$sign] <- c("Ant", "Syn")[1+(Ymean$R[Ymean$sign] < 0)]
   }
-
+  
   attr(Ymean, "df0") <- df0
   attr(Ymean, "cutoff") <- cutoff
   attr(Ymean, "q") <- q
   attr(Ymean, "distr") <- ecdf(M)
-
+  
   ans <- list("Call" = call,
               "Ymean" = Ymean)
   class(ans) <- append(class(ans), "maxR")
   ans
-
+  
 }
