@@ -15,7 +15,7 @@ Blissindependence <- function(doseInput, parmInput, ...){
   pars <- parmInput
   
   #We need the value between 0 and 1 for Bliss not estimated effect
-  Hilleq <- function(dose,b,L,U,logEC50){
+  Hilleq <- function(dose,b,logEC50){
     Hilleqread <- 1/(1 + (exp(logEC50)/dose)^(abs(b)))
   }
   
@@ -25,8 +25,8 @@ Blissindependence <- function(doseInput, parmInput, ...){
     return(predcombo)
     }
   
-  pred1 <- Hilleq(doseInput[, "d1"], pars["h1"], pars["b"], pars["m1"], pars["e1"])
-  pred2 <- Hilleq(doseInput[, "d2"], pars["h2"], pars["b"], pars["m2"], pars["e2"])
+  pred1 <- Hilleq(doseInput[, "d1"], pars["h1"], pars["e1"])
+  pred2 <- Hilleq(doseInput[, "d2"], pars["h2"], pars["e2"])
   
   apply(cbind(pred1,pred2),1, applyfunction)
 }
