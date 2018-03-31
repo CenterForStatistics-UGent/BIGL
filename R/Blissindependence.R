@@ -19,17 +19,17 @@ Blissindependence <- function(doseInput, parmInput, ...){
     Hilleqread <- 1/(1 + (exp(logEC50)/dose)^(abs(b)))
   }
   
-  #Bliss independence combination
-  applyfunction <- function(pred1, pred2,L,U1,U2){
-    #prediction value in percentage
-    predcombo <- pred1+pred2-pred1*pred2
-    #scale back to readout value by multiplying with the highest maximum response
-    predcombo <- ifelse(U1 > U2 ,L+(U1-L)*predcombo ,L+(U2-L)*predcombo)
-    return(predcombo)
-    }
-  
   pred1 <- Hilleq(doseInput[, "d1"], pars["h1"], pars["e1"])
   pred2 <- Hilleq(doseInput[, "d2"], pars["h2"], pars["e2"])
+  
+  #Bliss independence combination
+  applyfunction <- function(param){
+    #prediction value in percentage
+    predcombo <- param[1]+param[2]-param[1]*param[2]
+    #scale back to readout value by multiplying with the highest maximum response
+    predcombo <- ifelse(param[4] > param[5] ,param[3]+(param[4]-param[3])*predcombo ,param[3]+(param[5]-param[3])*predcombo)
+    return(predcombo)
+    }
   
   apply(cbind(pred1,pred2,pars["b"], pars["m1"],pars["m2"]),1, applyfunction)
 }
