@@ -43,7 +43,7 @@ predictOffAxis <- function(data, fitResult,
   predSurface[] <- switch(null_model,
                           "loewe" = fitLoewe$response,
                           "hsa" = hsa(doseGrid, fitResult$coef),
-                          "bliss" = Blissindependence(doseGrid, fitresult$coef))
+                          "bliss" = Blissindependence(doseGrid, fitResult$coef))
   
   if (!is.null(transforms)) {
     CompositeT <- with(transforms,
